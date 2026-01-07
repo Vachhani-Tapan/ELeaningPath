@@ -1635,10 +1635,10 @@
                         </div>
                         
                         <!-- Status Indicator -->
-                        <div class="status-indicator">
-                            <div class="status-dot" id="statusDot"></div>
-                            <span id="statusText">Camera Inactive</span>
-                        </div>
+                        <!-- <div class="status-indicator">
+                            <div class="status-dot" id="statusDot"></div> -->
+                            <!-- <span id="statusText">Camera Inactive</span> -->
+                        <!-- </div> -->
                         
                         <!-- Camera Control Buttons -->
                         <div class="camera-controls-section">
@@ -1893,33 +1893,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Expression Guide -->
-                <!-- <div class="card">
-                    <h2><i class="fas fa-smile"></i> Expression Guide</h2>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px;">
-                        <div class="expression-card">
-                            <div class="expression-emoji">😊</div>
-                            <div class="expression-label">Happy/Smile</div>
-                            <div class="expression-desc">High engagement, low frustration</div>
-                        </div>
-                        <div class="expression-card">
-                            <div class="expression-emoji">😠</div>
-                            <div class="expression-label">Angry/Frustrated</div>
-                            <div class="expression-desc">Low engagement, high frustration</div>
-                        </div>
-                        <div class="expression-card">
-                            <div class="expression-emoji">😐</div>
-                            <div class="expression-label">Neutral/Relaxed</div>
-                            <div class="expression-desc">Balanced emotional state</div>
-                        </div>
-                        <div class="expression-card">
-                            <div class="expression-emoji">😲</div>
-                            <div class="expression-label">Surprised/Engaged</div>
-                            <div class="expression-desc">High engagement, moderate frustration</div>
-                        </div>
-                    </div>
-                </div> -->
             </div>
         </div>
 
@@ -2218,6 +2191,257 @@
                 maxProgress: 5
             }
         ];
+
+        // ===================== FIXED CAMERA FUNCTIONS =====================
+        function checkCameraSupport() {
+            console.log("Checking camera support...");
+            
+            // Check if browser supports getUserMedia
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                console.log("Modern MediaDevices API not available, checking for older APIs...");
+                
+                // Try older API
+                navigator.getUserMedia = navigator.getUserMedia || 
+                                        navigator.webkitGetUserMedia || 
+                                        navigator.mozGetUserMedia || 
+                                        navigator.msGetUserMedia;
+                
+                if (!navigator.getUserMedia) {
+                    console.error("No camera API available in this browser");
+                    showFeedback('danger', 'Browser Not Supported', 
+                        'Your browser does not support camera access. Please use Chrome, Firefox, or Edge.');
+                    return false;
+                }
+            }
+            
+            console.log("Camera API is available");
+            return true;
+        }
+
+        async function startCamera() {
+            console.log("Starting camera...");
+            
+            if (!API_CONFIG.isConfigured) {
+                showFeedback('warning', 'API Not Configured', 'Please configure Face++ API first');
+                return;
+            }
+            
+            // Check camera support
+            if (!checkCameraSupport()) {
+                startBtn.disabled = true;
+                startBtn.innerHTML = '<i class="fas fa-times"></i> Camera Not Supported';
+                return;
+            }
+            
+            try {
+                showLoading('Initializing Camera', 'Requesting camera access...');
+                
+                // Try multiple camera configurations
+                const constraints = {
+                    video: {
+                        width: { ideal: 640, max: 1280 },
+                        height: { ideal: 480, max: 720 },
+                        facingMode: 'user',
+                        frameRate: { ideal: 24 }
+                    },
+                    audio: false
+                };
+                
+                // Use modern API or fallback
+                if (navigator.mediaDevices.getUserMedia) {
+                    console.log("Using modern MediaDevices API");
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } else if (navigator.getUserMedia) {
+                    console.log("Using legacy getUserMedia API");
+                    stream = await new Promise((resolve, reject) => {
+                        navigator.getUserMedia(constraints, resolve, reject);
+                    });
+                } else {
+                    throw new Error('Camera API not available');
+                }
+                
+                console.log("Camera stream obtained:", stream);
+                video.srcObject = stream;
+                
+                // Wait for video to be ready
+                await new Promise((resolve, reject) => {
+                    const onLoaded = () => {
+                        console.log("Video metadata loaded");
+                        video.removeEventListener('loadedmetadata', onLoaded);
+                        video.removeEventListener('error', onError);
+                        resolve();
+                    };
+                    
+                    const onError = (err) => {
+                        console.error("Video error:", err);
+                        video.removeEventListener('loadedmetadata', onLoaded);
+                        video.removeEventListener('error', onError);
+                        reject(err);
+                    };
+                    
+                    video.addEventListener('loadedmetadata', onLoaded);
+                    video.addEventListener('error', onError);
+                    
+                    // Fallback timeout
+                    setTimeout(() => {
+                        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+                            console.log("Video ready via timeout");
+                            resolve();
+                        } else {
+                            console.warn("Video not ready after timeout");
+                            reject(new Error('Video not ready'));
+                        }
+                    }, 3000);
+                });
+                
+                hideLoading();
+                
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                captureBtn.disabled = false;
+                isCameraActive = true;
+                
+                statusDot.classList.add('active');
+                statusDot.style.background = '#10b981';
+                statusDot.style.boxShadow = '0 0 10px #10b981';
+                statusText.style.color = '#10b981';
+                
+                detectionStartTime = new Date();
+                sessionStartTime = new Date();
+                
+                sessionPointsEarned = 0;
+                sessionPoints.textContent = '0';
+                sessionCaptures.textContent = '0';
+                faceDetectionErrors = 0;
+                
+                const firstLog = logContainer.firstChild;
+                if (firstLog && firstLog.textContent.includes('No captures yet')) {
+                    logContainer.innerHTML = '';
+                }
+                
+                showFeedback('success', 'Camera Active', 
+                    'Face++ API is ready. Make sure your face is well-lit and clearly visible. ' +
+                    'Click "Capture & Analyze" to detect emotions.');
+                
+                console.log("Camera started successfully");
+                
+            } catch (err) {
+                hideLoading();
+                console.error('Error accessing camera:', err.name, err.message);
+                
+                let errorMessage = 'Please allow camera access to use face detection.';
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    errorMessage = 'No camera found. Please connect a camera and try again.';
+                } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                    errorMessage = 'Camera is already in use by another application.';
+                } else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+                    errorMessage = 'Cannot find camera with required specifications. Trying alternative settings...';
+                    // Try with simpler constraints
+                    setTimeout(() => startCameraWithSimpleConstraints(), 100);
+                    return;
+                } else if (err.name === 'TypeError') {
+                    errorMessage = 'Camera error. Please check if your camera is connected and try again.';
+                } else if (err.message.includes('secure context')) {
+                    errorMessage = 'Camera requires a secure context (HTTPS). Please use HTTPS or localhost.';
+                } else if (err.message.includes('not ready')) {
+                    errorMessage = 'Camera not ready. Please try again.';
+                }
+                
+                statusText.textContent = 'Camera Error';
+                statusText.style.color = '#ef4444';
+                showFeedback('danger', 'Camera Error', errorMessage);
+                
+                // Reset UI
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                captureBtn.disabled = true;
+            }
+        }
+
+        // Alternative function with simpler constraints
+        async function startCameraWithSimpleConstraints() {
+            try {
+                console.log("Trying alternative camera settings...");
+                showLoading('Initializing Camera', 'Trying alternative camera settings...');
+                
+                const simpleConstraints = {
+                    video: {
+                        facingMode: 'user'
+                    },
+                    audio: false
+                };
+                
+                let stream;
+                if (navigator.mediaDevices.getUserMedia) {
+                    stream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
+                } else if (navigator.getUserMedia) {
+                    stream = await new Promise((resolve, reject) => {
+                        navigator.getUserMedia(simpleConstraints, resolve, reject);
+                    });
+                }
+                
+                video.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    if (video.readyState >= 2) {
+                        resolve();
+                    } else {
+                        video.onloadedmetadata = resolve;
+                        setTimeout(resolve, 2000);
+                    }
+                });
+                
+                hideLoading();
+                
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                captureBtn.disabled = false;
+                isCameraActive = true;
+                
+                statusDot.classList.add('active');
+                statusText.textContent = 'Camera Active - Ready for Analysis';
+                statusText.style.color = '#10b981';
+                
+                showFeedback('success', 'Camera Active', 'Camera started with basic settings. Face detection ready.');
+                console.log("Alternative camera settings worked!");
+                
+            } catch (err) {
+                hideLoading();
+                console.error('Alternative camera error:', err);
+                showFeedback('danger', 'Camera Unavailable', 
+                    'Unable to access camera. Please check camera permissions and try again.');
+            }
+        }
+
+        function stopCamera() {
+            console.log("Stopping camera...");
+            
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                });
+                stream = null;
+            }
+            
+            video.srcObject = null;
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            captureBtn.disabled = true;
+            isCameraActive = false;
+            statusDot.classList.remove('active');
+            statusText.style.color = '#94a3b8';
+            statusDot.style.background = '#ef4444';
+            statusDot.style.boxShadow = 'none';
+            
+            detectedFace.textContent = '📷';
+            emotionLabel.textContent = 'Camera Stopped';
+            emotionDescription.textContent = 'Start camera to capture and analyze photos';
+            
+            showFeedback('info', 'Camera Stopped', 'Camera has been stopped. Start camera to continue.');
+        }
 
         // ===================== API CONFIGURATION FUNCTIONS =====================
         function toggleApiConfiguration() {
@@ -2672,107 +2896,6 @@
         }
 
         // ===================== UI FUNCTIONS =====================
-        async function startCamera() {
-            if (!API_CONFIG.isConfigured) {
-                showFeedback('warning', 'API Not Configured', 'Please configure Face++ API first');
-                return;
-            }
-            
-            try {
-                showLoading('Initializing Camera', 'Requesting camera access...');
-                
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        facingMode: 'user',
-                        frameRate: { ideal: 30 }
-                    },
-                    audio: false
-                });
-                
-                video.srcObject = stream;
-                
-                await new Promise((resolve, reject) => {
-                    video.onloadedmetadata = () => {
-                        resolve();
-                    };
-                    video.onerror = reject;
-                    setTimeout(() => resolve(), 2000);
-                });
-                
-                hideLoading();
-                
-                startBtn.disabled = true;
-                stopBtn.disabled = false;
-                captureBtn.disabled = false;
-                isCameraActive = true;
-                
-                statusDot.classList.add('active');
-                statusDot.style.background = '#10b981';
-                statusDot.style.boxShadow = '0 0 10px #10b981';
-                statusText.textContent = 'Camera Active - Ready for Analysis';
-                statusText.style.color = '#10b981';
-                
-                detectionStartTime = new Date();
-                sessionStartTime = new Date();
-                
-                sessionPointsEarned = 0;
-                sessionPoints.textContent = '0';
-                sessionCaptures.textContent = '0';
-                faceDetectionErrors = 0;
-                
-                const firstLog = logContainer.firstChild;
-                if (firstLog && firstLog.textContent.includes('No captures yet')) {
-                    logContainer.innerHTML = '';
-                }
-                
-                showFeedback('success', 'Camera Active', 
-                    'Face++ API is ready. Make sure your face is well-lit and clearly visible. ' +
-                    'Click "Capture & Analyze" to detect emotions.');
-                
-            } catch (err) {
-                hideLoading();
-                console.error('Error accessing camera:', err);
-                
-                let errorMessage = 'Please allow camera access to use face detection.';
-                if (err.name === 'NotAllowedError') {
-                    errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
-                } else if (err.name === 'NotFoundError') {
-                    errorMessage = 'No camera found. Please connect a camera and try again.';
-                } else if (err.name === 'NotReadableError') {
-                    errorMessage = 'Camera is already in use by another application.';
-                }
-                
-                statusText.textContent = 'Camera Error';
-                statusText.style.color = '#ef4444';
-                showFeedback('danger', 'Camera Error', errorMessage);
-            }
-        }
-
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-            }
-            
-            video.srcObject = null;
-            
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            captureBtn.disabled = true;
-            isCameraActive = false;
-            statusDot.classList.remove('active');
-            statusText.textContent = 'Camera Inactive';
-            statusText.style.color = '#94a3b8';
-            statusDot.style.background = '#ef4444';
-            statusDot.style.boxShadow = 'none';
-            
-            detectedFace.textContent = '📷';
-            emotionLabel.textContent = 'Camera Stopped';
-            emotionDescription.textContent = 'Start camera to capture and analyze photos';
-        }
-
         async function captureAndAnalyze() {
             if (!isCameraActive) {
                 showFeedback('warning', 'Camera Inactive', 'Please start the camera first.');
@@ -3563,6 +3686,16 @@
 
         // ===================== INITIALIZATION =====================
         document.addEventListener('DOMContentLoaded', () => {
+            console.log("Initializing Emotion Detection System...");
+            
+            // Check if running on HTTPS or localhost
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                console.warn("Running on non-secure context. Camera may not work.");
+                showFeedback('warning', 'Security Notice', 
+                    'For best camera compatibility, use HTTPS or localhost. Some browsers may restrict camera access on HTTP.');
+            }
+            
+            // Load saved API configuration
             const savedConfig = localStorage.getItem('faceppConfig');
             if (savedConfig) {
                 try {
@@ -3570,6 +3703,7 @@
                     faceppKeyInput.value = config.key;
                     faceppSecretInput.value = config.secret;
                     
+                    // Auto-test API if credentials exist
                     setTimeout(() => {
                         if (config.key && config.secret) {
                             setupFacePlusPlus();
@@ -3582,12 +3716,21 @@
             
             initGameState();
             
+            // Update timers periodically
             setInterval(() => {
                 if (isCameraActive) {
                     updateDetectionTime();
                     updateSessionStats();
                 }
             }, 1000);
+            
+            // Test browser support
+            if (!checkCameraSupport()) {
+                startBtn.disabled = true;
+                startBtn.innerHTML = '<i class="fas fa-times"></i> Camera Not Supported';
+            }
+            
+            console.log("Initialization complete.");
         });
 
         // ===================== EVENT LISTENERS =====================
@@ -3611,6 +3754,24 @@
                 closeFaceErrorModal();
             }
         });
+
+        // ===================== TROUBLESHOOTING FUNCTIONS =====================
+        function checkCameraPermissions() {
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({name: 'camera'})
+                    .then(permissionStatus => {
+                        console.log('Camera permission state:', permissionStatus.state);
+                        if (permissionStatus.state === 'denied') {
+                            showFeedback('danger', 'Camera Blocked', 
+                                'Camera access is blocked. Please enable camera permissions in your browser settings.');
+                        }
+                    })
+                    .catch(console.error);
+            }
+        }
+
+        // Check permissions on load
+        document.addEventListener('DOMContentLoaded', checkCameraPermissions);
     </script>
 </body>
 </html>

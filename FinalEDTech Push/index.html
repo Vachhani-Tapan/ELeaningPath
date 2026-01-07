@@ -2264,6 +2264,28 @@
             color: white;
         }
 
+        .recommendation-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background-color: #4a6cf7;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .recommendation-btn:hover {
+            background-color: #3a5ce5;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 108, 247, 0.3);
+        }
+
         @media (max-width: 768px) {
             .ai-floating-btn {
                 width: 60px;
@@ -2430,15 +2452,16 @@
                     <h3><i class="fas fa-robot"></i> AI Recommendations</h3>
 
                     <div class="ai-recommendation">
-                        <h4>Switch to visual learning</h4>
-                        <p>You perform better with diagrams and videos. Try the visual learning
-                            lesson.</p>
+                        <h4>Emotional Engagement</h4>
+                        <p>Our AI detects you respond better to emotionally resonant content.</p>
+                        <a href="emotion.html" class="recommendation-btn">
+                            Explore Emotional Lessons
+                        </a>
                     </div>
 
                     <div class="ai-recommendation">
                         <h4>Try our new AI Assistant</h4>
-                        <p>I've added an AI chatbot to help with your studies. Click the floating button to start a
-                            conversation.</p>
+                        <p>I've added an AI chatbot to help with your studies. Click the floating button.</p>
                     </div>
 
                     <div class="ai-recommendation">

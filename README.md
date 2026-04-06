@@ -1,7 +1,3 @@
-Here’s a **clean, professional GitHub README.md** for your project. You can copy-paste it directly.
-
----
-
 # 📚 Adaptive Learning Platform
 
 ### Personalized Curriculum Based on Knowledge Gaps, Learning Style & Emotional Engagement
